@@ -200,195 +200,65 @@ GROQ_MODEL=openai/gpt-oss-20b
 
 The suite includes verification scripts testing offline simulator components, concurrency boundaries, rate limit enforcement, retry mechanisms, and full-pipeline fault tolerance.
 
-### 1. Stand-In Mock Model Verification
-Tests deterministic latency simulation, exception triggering, rate-limit injection, refusals, and streaming tokens.
+### 1. Overall Test Suite Results
 
-Command:
-```powershell
-python scripts/test_standin.py
-```
-
-Output:
-```text
-TEST 1: Normal request
-Latency: 100.68 ms
-PASS
-
-TEST 2: Simulated failure
-PASS
-
-TEST 3: Simulated rate limit
-PASS
-
-TEST 4: Slow response
-Measured latency: 500.62 ms
-PASS
-
-TEST 5: Refusal
-Answer: I cannot answer this reliably using the available research papers.
-PASS
-
-TEST 6: Streaming response
-The Transformer uses attention mechanisms to process relationships between tokens. 
-PASS
-```
+| Test Script | Test ID / Case Description | Conditions / Parameters | Observed Output / Metrics | Status |
+|---|---|---|---|---|
+| `scripts/test_standin.py` | TEST 1: Normal request | Default latency (~100 ms) | Latency: 100.68 ms | PASS |
+| `scripts/test_standin.py` | TEST 2: Simulated failure | `failure_rate = 1.0` | Raised `StandInError` as expected | PASS |
+| `scripts/test_standin.py` | TEST 3: Simulated rate limit | `rate_limit_every = 2` | Raised `StandInRateLimitError` (HTTP 429) | PASS |
+| `scripts/test_standin.py` | TEST 4: Slow response | `latency_ms = 500` | Measured latency: 500.62 ms | PASS |
+| `scripts/test_standin.py` | TEST 5: Refusal | `refusal_rate = 1.0` | "I cannot answer this reliably..." | PASS |
+| `scripts/test_standin.py` | TEST 6: Streaming response | Stream generator | Complete response tokens streamed | PASS |
+| `scripts/test_rate_limiter.py` | TEST 1: Burst allowance | 3 requests, window 1.0s | All 3 dispatched immediately | PASS |
+| `scripts/test_rate_limiter.py` | TEST 2: Excess request waits | 4th request exceeds quota | Thread blocked until quota cleared | PASS |
+| `scripts/test_rate_limiter.py` | TEST 3: Window refresh | Wait > window duration | Capacity restored; request allowed | PASS |
+| `scripts/test_concurrency.py` | TEST: Concurrency ceiling | `max_concurrent = 2`, 4 tasks | Peak concurrent tasks observed: 2 | PASS |
+| `scripts/test_retry.py` | TEST 1: Transient recovery | Fails 1st attempt, succeeds 2nd | Successfully returned result | PASS |
+| `scripts/test_retry.py` | TEST 2: Exponential backoff | `base_delay = 0.25s`, 2 retries | Backoff delay observed (0.25s -> 0.50s) | PASS |
+| `scripts/test_retry.py` | TEST 3: Max retries limit | Continuous failure, `max_retries = 2` | Re-raised exception after 2 retries | PASS |
+| `scripts/test_retry.py` | TEST 4: Non-retryable error | `ValueError` | Immediate failure without retry | PASS |
+| `scripts/test_request_controller.py` | TEST 1: Controller retry loop | Temporary fault in upstream | Caught, retried, and recovered | PASS |
+| `scripts/test_request_controller.py` | TEST 2: Normal request execution | Successful invocation | Result returned with retry count = 0 | PASS |
+| `scripts/test_provider_interface.py` | TEST 1: GroqClient interface | Subclass/protocol check | Implements ModelProvider protocol | PASS |
+| `scripts/test_provider_interface.py` | TEST 2: StandInModel interface | Subclass/protocol check | Implements ModelProvider protocol | PASS |
+| `scripts/test_provider_interface.py` | TEST 3: Stand-in generate schema | Output schema verification | Valid response with tokens and latency | PASS |
+| `scripts/test_provider_interface.py` | TEST 4: Stand-in evidence schema | Output schema verification | Valid evidence decision dictionary | PASS |
+| `scripts/test_pipeline_retries.py` | End-to-end pipeline resiliency | Simulated flaky evidence & generation | Evidence retries: 1, Generation retries: 1 | PASS |
 
 ---
 
-### 2. Sliding-Window Rate Limiter Verification
-Verifies burst capacity allowance, request queue blocking when quota is exceeded, and window refreshment.
+### 2. End-to-End Pipeline Fault Tolerance Output
 
-Command:
-```powershell
-python scripts/test_rate_limiter.py
-```
+Tested via `scripts/test_pipeline_retries.py` against a flaky provider simulating independent transient errors during evidence verification and answer generation:
 
-Output:
-```text
-TEST 1: Three requests allowed - PASS
-TEST 2: Excess request waits - PASS
-TEST 3: Request allowed after window refresh - PASS
-
-All rate limiter tests passed.
-```
+| Pipeline Stage | Injected Failure | Total Provider Invocations | Retries Consumed | Final Stage Status |
+|---|---|---|---|---|
+| Index Initialization | None | N/A | 0 | BM25 index built with 315 chunks |
+| Evidence Checking | Simulated `StandInError` on attempt 1 | 2 | 1 | Verified evidence: sufficient |
+| Answer Generation | Simulated `StandInError` on attempt 1 | 2 | 1 | Complete generated answer |
+| Overall Pipeline Run | None | 4 | 2 | Status: `answered` |
 
 ---
 
-### 3. Concurrency Limiter Verification
-Executes concurrent worker threads to verify that simultaneous operations do not exceed the bounded semaphore threshold.
+### 3. BM25 Query Relevance Diagnostics
 
-Command:
-```powershell
-python scripts/test_concurrency.py
-```
+Extracted from `scripts/inspect_scores.py` comparing lexical retrieval scores on answerable research queries versus out-of-domain unanswerable queries:
 
-Output:
-```text
-Peak concurrent tasks: 2
-TEST: Concurrency limit enforced - PASS
-```
-
----
-
-### 4. Exponential Backoff and Error Recovery Verification
-Verifies retry backoff delays, handling of retryable status codes/errors, maximum retry enforcement, and immediate rejection of non-retryable errors.
-
-Command:
-```powershell
-python scripts/test_retry.py
-```
-
-Output:
-```text
-TEST 1: Retry after temporary failure - PASS
-TEST 2: Exponential backoff - PASS
-TEST 3: Maximum retries enforced - PASS
-TEST 4: Non-retryable error - PASS
-
-All 4 retry tests passed.
-```
-
----
-
-### 5. Request Controller Integration Verification
-Verifies that the unified controller correctly combines rate limiting, concurrency limiting, and backoff retries.
-
-Command:
-```powershell
-python scripts/test_request_controller.py
-```
-
-Output:
-```text
-TEST 1: Request controller retries - PASS
-TEST 2: Successful request - PASS
-
-All request controller tests passed.
-```
-
----
-
-### 6. Provider Protocol Compatibility Verification
-Validates that both `GroqClient` and `StandInModel` adhere to the `ModelProvider` structural typing protocol and return expected response schemas.
-
-Command:
-```powershell
-python scripts/test_provider_interface.py
-```
-
-Output:
-```text
-TEST 1: Groq provider interface
-PASS
-
-TEST 2: Stand-in provider interface
-PASS
-
-TEST 3: Stand-in generate response
-PASS
-
-TEST 4: Stand-in evidence response
-PASS
-
-All 4 compatibility tests passed.
-```
-
----
-
-### 7. End-to-End Pipeline Resiliency Under Fault Injection
-Tests the full `ResearchPipeline` against an intentionally flaky provider that fails once in the evidence checking phase and once in the generation phase.
-
-Command:
-```powershell
-python scripts/test_pipeline_retries.py
-```
-
-Output:
-```text
-BM25 index created with 315 chunks.
-
-STATUS: answered
-RETRY METRICS: {'evidence_retries': 1, 'generation_retries': 1}
-EVIDENCE CALLS: 2
-GENERATION CALLS: 2
-
-ALL PIPELINE RETRY TESTS PASSED.
-```
-
----
-
-### 8. Retrieval Score Diagnostics
-Inspects BM25 relevance scores across both answerable domain queries and out-of-domain unanswerable queries.
-
-Command:
-```powershell
-python scripts/inspect_scores.py
-```
-
-Output:
-```text
-BM25 index created with 315 chunks.
-
-[ANSWERABLE] How does scaled dot-product attention work?
-Score: 26.4676 | Paper: attention | Page: 4
-Score: 17.6409 | Paper: attention | Page: 4
-Score: 17.3404 | Paper: attention | Page: 1
-
-[ANSWERABLE] How does Moshi enable real-time speech dialogue?
-Score: 11.8901 | Paper: moshi | Page: 7
-Score: 10.5020 | Paper: moshi | Page: 62
-Score: 10.3981 | Paper: moshi | Page: 1
-
-[UNANSWERABLE] What is the current NVIDIA stock price?
-Score: 10.2110 | Paper: attention | Page: 15
-Score: 10.0834 | Paper: attention | Page: 14
-Score: 9.4590 | Paper: dynamic_chunking | Page: 9
-
-[UNANSWERABLE] What is the best Java programming course?
-Score: 13.0191 | Paper: moshi | Page: 63
-Score: 10.5204 | Paper: moshi | Page: 65
-Score: 10.4746 | Paper: moshi | Page: 30
-```
+| Query Type | Query Text | Rank | Target Paper | Page Number | BM25 Score |
+|---|---|---|---|---|---|
+| Answerable | How does scaled dot-product attention work? | 1 | attention | Page 4 | 26.4676 |
+| Answerable | How does scaled dot-product attention work? | 2 | attention | Page 4 | 17.6409 |
+| Answerable | How does scaled dot-product attention work? | 3 | attention | Page 1 | 17.3404 |
+| Answerable | How does Moshi enable real-time speech dialogue? | 1 | moshi | Page 7 | 11.8901 |
+| Answerable | How does Moshi enable real-time speech dialogue? | 2 | moshi | Page 62 | 10.5020 |
+| Answerable | How does Moshi enable real-time speech dialogue? | 3 | moshi | Page 1 | 10.3981 |
+| Unanswerable | What is the current NVIDIA stock price? | 1 | attention | Page 15 | 10.2110 |
+| Unanswerable | What is the current NVIDIA stock price? | 2 | attention | Page 14 | 10.0834 |
+| Unanswerable | What is the current NVIDIA stock price? | 3 | dynamic_chunking | Page 9 | 9.4590 |
+| Unanswerable | What is the best Java programming course? | 1 | moshi | Page 63 | 13.0191 |
+| Unanswerable | What is the best Java programming course? | 2 | moshi | Page 65 | 10.5204 |
+| Unanswerable | What is the best Java programming course? | 3 | moshi | Page 30 | 10.4746 |
 
 ---
 
