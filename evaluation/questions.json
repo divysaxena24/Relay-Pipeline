@@ -1,0 +1,214 @@
+[
+    {
+        "id": "Q01",
+        "category": "factual",
+        "question": "How does scaled dot-product attention work?",
+        "expected_papers": [
+            "attention"
+        ],
+        "expected_terms": [
+            "query",
+            "key",
+            "value",
+            "softmax"
+        ],
+        "answerable": true
+    },
+    {
+        "id": "Q02",
+        "category": "factual",
+        "question": "How does multi-head attention work in the Transformer?",
+        "expected_papers": [
+            "attention"
+        ],
+        "expected_terms": [
+            "heads",
+            "attention",
+            "concatenated",
+            "projections"
+        ],
+        "answerable": true
+    },
+    {
+        "id": "Q03",
+        "category": "factual",
+        "question": "Why does the Transformer use positional encoding?",
+        "expected_papers": [
+            "attention"
+        ],
+        "expected_terms": [
+            "position",
+            "sequence",
+            "order",
+            "encoding"
+        ],
+        "answerable": true
+    },
+    {
+        "id": "Q04",
+        "category": "factual",
+        "question": "What is the role of the feed-forward network in a Transformer encoder?",
+        "expected_papers": [
+            "attention"
+        ],
+        "expected_terms": [
+            "feed-forward",
+            "position",
+            "linear",
+            "relu"
+        ],
+        "answerable": true
+    },
+    {
+        "id": "Q05",
+        "category": "factual",
+        "question": "How does Moshi support real-time speech dialogue?",
+        "expected_papers": [
+            "moshi"
+        ],
+        "expected_terms": [
+            "real-time",
+            "speech",
+            "text",
+            "audio"
+        ],
+        "answerable": true
+    },
+    {
+        "id": "Q06",
+        "category": "factual",
+        "question": "What is the purpose of the Mimi audio codec in Moshi?",
+        "expected_papers": [
+            "moshi"
+        ],
+        "expected_terms": [
+            "mimi",
+            "codec",
+            "audio",
+            "stream"
+        ],
+        "answerable": true
+    },
+    {
+        "id": "Q07",
+        "category": "factual",
+        "question": "What is the role of the Inner Monologue in Moshi?",
+        "expected_papers": [
+            "moshi"
+        ],
+        "expected_terms": [
+            "inner monologue",
+            "text",
+            "speech",
+            "generation"
+        ],
+        "answerable": true
+    },
+    {
+        "id": "Q08",
+        "category": "multi_passage",
+        "question": "How does Moshi combine its language model and audio components to generate dialogue?",
+        "expected_papers": [
+            "moshi"
+        ],
+        "expected_terms": [
+            "language model",
+            "audio",
+            "mimi",
+            "stream"
+        ],
+        "answerable": true
+    },
+    {
+        "id": "Q09",
+        "category": "factual",
+        "question": "What is dynamic chunking in hierarchical sequence modeling?",
+        "expected_papers": [
+            "dynamic_chunking"
+        ],
+        "expected_terms": [
+            "dynamic",
+            "chunk",
+            "hierarchical",
+            "sequence"
+        ],
+        "answerable": true
+    },
+    {
+        "id": "Q10",
+        "category": "factual",
+        "question": "How does H-Net use learned boundaries to create hierarchical representations?",
+        "expected_papers": [
+            "dynamic_chunking"
+        ],
+        "expected_terms": [
+            "h-net",
+            "boundary",
+            "hierarchical",
+            "representation"
+        ],
+        "answerable": true
+    },
+    {
+        "id": "Q11",
+        "category": "multi_passage",
+        "question": "How does dynamic chunking differ from processing a sequence as fixed-size tokens?",
+        "expected_papers": [
+            "dynamic_chunking"
+        ],
+        "expected_terms": [
+            "fixed",
+            "chunk",
+            "boundary",
+            "sequence"
+        ],
+        "answerable": true
+    },
+    {
+        "id": "Q12",
+        "category": "multi_passage",
+        "question": "Compare the role of attention in Transformers with hierarchical sequence modeling in the dynamic chunking paper.",
+        "expected_papers": [
+            "attention",
+            "dynamic_chunking"
+        ],
+        "expected_terms": [
+            "attention",
+            "hierarchical",
+            "sequence",
+            "chunk"
+        ],
+        "answerable": true
+    },
+    {
+        "id": "Q13",
+        "category": "cross_paper",
+        "question": "How do the Transformer and Moshi papers use attention-based architectures?",
+        "expected_papers": [
+            "attention",
+            "moshi"
+        ],
+        "expected_terms": [
+            "attention",
+            "transformer",
+            "architecture"
+        ],
+        "answerable": true
+    },
+    {
+        "id": "Q14",
+        "category": "unanswerable",
+        "question": "What is the current stock price of NVIDIA?",
+        "expected_papers": [],
+        "expected_terms": [],
+        "answerable": false
+    },
+    {
+        "id": "Q15",
+        "category": "unanswerable",
+        "question": "What is the best Java programming course for beginners?",
+        "expected_papers": [],
+        "expected_terms": [],
+        "answerable": false
+    }
+]
