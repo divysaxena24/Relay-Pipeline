@@ -1,0 +1,6 @@
+request_id,scenario,source,start_time,first_token_ms,total_ms,status,retries,tokens_in,tokens_out,retrieval_setting,answer_grade
+real-baseline-01,baseline_sequential,real,2026-11-12T13:47:28.154910+00:00,,2432.77,ok,0,189,353,manual_context,
+real-baseline-02,baseline_sequential,real,2026-11-12T13:47:32.588958+00:00,,572.59,ok,0,189,354,manual_context,
+real-baseline-03,baseline_sequential,real,2026-11-12T13:47:35.162598+00:00,,298.23,ok,0,189,174,manual_context,
+real-baseline-04,baseline_sequential,real,2026-11-12T13:47:37.461453+00:00,,523.03,ok,0,189,255,manual_context,
+real-baseline-05,baseline_sequential,real,2026-11-12T13:47:39.984910+00:00,,702.36,ok,0,189,188,manual_context,
