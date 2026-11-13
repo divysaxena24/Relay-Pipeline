@@ -1,7 +1,0 @@
-scenario,source,requests,success_pct,rate_limited_pct,timeout_pct,error_pct,avg_retries_per_request,p50_total_ms,p95_total_ms,p99_total_ms,avg_tokens_in,avg_tokens_out,first_token_measurements
-baseline_sequential,real,5,100.0,0.0,0.0,0.0,0.0,572.59,2086.69,2363.55,189.0,264.8,0
-hour9_burst,stand-in,120,100.0,0.0,0.0,0.0,0.0,3154.31,5734.02,5734.8,24.0,18.0,0
-hour9_daily_budget_v1,stand-in,20,25.0,75.0,0.0,0.0,1.5,2647.66,4900.15,4900.53,24.0,18.0,0
-hour9_reduced_limit_v1,stand-in,40,100.0,0.0,0.0,0.0,0.0,2292.52,61140.12,61153.48,24.0,18.0,0
-hour9_steady_v2,stand-in,60,100.0,0.0,0.0,0.0,0.0,573.74,575.49,575.89,24.0,18.0,0
-hour9_sustained_overload,stand-in,160,100.0,0.0,0.0,0.0,0.0,3104.92,5636.44,6057.19,24.0,18.0,0
