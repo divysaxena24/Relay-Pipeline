@@ -6,44 +6,111 @@ The final assignment report is available in Markdown at [report/FINAL_REPORT.md]
 
 ---
 
-## Architecture
+## System Architecture
 
-Relay decouples retrieval, traffic control, and model invocation. Queries are retrieved via lexical search over indexed document chunks, gated by an evidence verification check before generation, and executed through a centralized request controller.
+The Relay system decouples document ingestion, lexical retrieval, pipeline orchestration, model execution, and traffic control. Incoming questions pass through the `ResearchPipeline`, which queries an Okapi BM25 index over three fixed arXiv research papers, coordinates remote or simulated inference through a centralized `RequestController` (enforcing concurrency limits, exponential backoff retries, and sliding-window rate limits), and performs two-stage evidence verification and citation validation.
 
 ```mermaid
 flowchart TD
-    User([User Query]) --> RP[ResearchPipeline]
-    
-    subgraph RetrievalStage [Retrieval Stage]
-        RP --> BM25[BM25 Retriever]
-        BM25 --> Corpus[(Indexed Document Chunks)]
-        Corpus --> Context[Top-K Passage Aggregator]
+    User([User / Question]) --> Pipeline[Research Pipeline]
+
+    subgraph PipelineStage [Research Pipeline Orchestration]
+        Pipeline --> QVal[Question Validation]
+        QVal --> SearchCall[BM25 Retrieval Search]
+        SearchCall --> CtxBuild[Evidence Context Construction & Source ID Assignment]
+        CtxBuild --> EvidenceGate[Evidence Sufficiency Check]
+        EvidenceGate --> AnswerGen[Answer Generation]
+        AnswerGen --> CitationVal[Structural Citation Validation]
     end
 
-    subgraph ControlPlane [Request Controller & Resiliency Layer]
-        Context --> RC[1. RequestController: execute]
-        RC --> CL[2. ConcurrencyLimiter: acquire semaphore]
-        CL --> RB[3. call_with_retries: start retry loop]
-        RB --> RL[4. RateLimiter: acquire sliding window before each attempt]
-        RL --> Provider{5. Model Provider Call}
-        Provider -->|Success| OutputGate[Return Result]
-        Provider -->|Retryable Error| RetryDecision{Retries left?}
-        RetryDecision -->|Yes: exponential backoff delay| RB
-        RetryDecision -->|No: raise error| Terminate[Terminal Failure]
+    subgraph RetrievalLayer [Retrieval Layer]
+        Papers[(Three Fixed arXiv Papers:<br/>attention_v7, dynamic_chunking_v2, moshi_v1)] --> Ingest[PDF Ingestion: PyMuPDF]
+        Ingest --> PageExtract[Page Text Extraction: pages.json]
+        PageExtract --> Chunking[Word-Based Chunking with Overlap: chunks.json]
+        Chunking --> BM25Index[In-Memory Okapi BM25 Index]
+        BM25Index -.-> SearchCall
     end
 
-    subgraph ExecutionPlane [Model Execution Layer]
-        Provider -->|Live API| Groq[GroqClient - openai/gpt-oss-20b]
-        Provider -->|Offline Simulation| StandIn[StandInModel - Configurable Mock Provider]
+    subgraph ControlLayer [Reliability and Control Layer: RequestController]
+        SearchCall -.-> ContextPassages[Passages S1..Sk]
+        EvidenceGate --> RC1[RequestController: execute]
+        AnswerGen --> RC2[RequestController: execute]
+        RC1 & RC2 --> ConcLimiter[ConcurrencyLimiter: acquire semaphore max_concurrent=3]
+        ConcLimiter --> RetryLoop[call_with_retries: start retry loop max_retries=2]
+        RetryLoop --> RateLimiter[RateLimiter: acquire sliding window before each attempt]
+        RateLimiter --> ProviderCall[Model Provider Invocation]
+        ProviderCall -->|Success| RetSuccess[Return Response]
+        ProviderCall -->|Retryable Error| RetryCheck{Retries left?}
+        RetryCheck -->|Yes: exponential backoff delay| RetryLoop
+        RetryCheck -->|No / Non-retryable| RetFailure[Raise Exception]
     end
 
-    subgraph EvaluationStage [Validation & Refusal Gate]
-        OutputGate --> Decision{Evidence Sufficient?}
-        Decision -->|No / Insufficient| Refusal[Refusal Response - Status: refused]
-        Decision -->|Yes| AnswerGen[Answer Generation with Source IDs]
-        AnswerGen --> CitationValidation[Structural Citation ID Validator]
-        CitationValidation --> FinalOutput([Structured Result Dictionary])
+    subgraph ProviderLayer [Model Provider Layer]
+        ProviderCall --> ProviderInterface{Shared ModelProvider Protocol}
+        ProviderInterface -->|Live Inference| GroqClient[GroqClient: openai/gpt-oss-20b]
+        ProviderInterface -->|Offline Simulation| StandInModel[StandInModel: Configurable Mock Provider]
     end
+
+    subgraph OutputLayer [Structured Outputs]
+        CitationVal --> OutAnswer[Answer with Validated Source Citations]
+        EvidenceGate -->|Insufficient Evidence| OutRefusal[Explicit Refusal: status refused]
+        SearchCall -->|No Passages Found| OutRefusal
+        RetFailure --> OutError[Handled Failure: status error]
+    end
+```
+
+---
+
+## How It Works
+
+The following workflow diagram illustrates the end-to-end request lifecycle and decision branching during query execution. The pipeline retrieves passages, builds citation identifiers (`[S1]`, `[S2]`), checks evidence sufficiency through the `RequestController`, generates an answer if evidence permits, and verifies that all cited identifiers structurally match retrieved passages.
+
+```mermaid
+flowchart TD
+    Start([1. User submits research question]) --> ValQ{2. Validate question non-empty?}
+    ValQ -->|No: Empty string| ErrEmpty[Raise ValueError: Question cannot be empty]
+    ValQ -->|Yes| BM25Search[3. Retrieve top-k relevant chunks via BM25]
+
+    BM25Search --> CheckPassages{4. Are any passages retrieved?}
+    CheckPassages -->|No: Empty results| RefuseEmpty[Return structured refusal:<br/>status: refused<br/>reason: No relevant passages found]
+    CheckPassages -->|Yes: Passages found| BuildContext[Build context string and assign source IDs: S1, S2, ...]
+
+    BuildContext --> ExecEvidence[5. Call check_evidence through RequestController]
+
+    subgraph EvidenceExec [Evidence Check Execution Flow]
+        ExecEvidence --> EvAcquireConc[Acquire Concurrency Semaphore]
+        EvAcquireConc --> EvRetryStart[call_with_retries loop attempt]
+        EvRetryStart --> EvRateLimit[Acquire RateLimiter sliding window]
+        EvRateLimit --> EvCall[Provider: check_evidence]
+        EvCall -->|Transient Error| EvCanRetry{Retries < 2?}
+        EvCanRetry -->|Yes: backoff delay| EvRetryStart
+        EvCanRetry -->|No / Fatal Error| EvFail[Evidence checking failed]
+        EvCall -->|Success| EvReleaseConc[Release Concurrency Semaphore]
+    end
+
+    EvFail --> ErrEvidence[Return structured error:<br/>status: error<br/>reason: Evidence checking failed]
+    EvReleaseConc --> CheckEvSufficient{6. Is evidence sufficient?}
+    CheckEvSufficient -->|No: sufficient is False| RefuseInsuff[Return structured refusal:<br/>status: refused<br/>reason: Retrieved passages lack sufficient evidence]
+    CheckEvSufficient -->|Yes: sufficient is True| ExecGenerate[7. Call generate through RequestController]
+
+    subgraph GenerateExec [Answer Generation Execution Flow]
+        ExecGenerate --> GenAcquireConc[Acquire Concurrency Semaphore]
+        GenAcquireConc --> GenRetryStart[call_with_retries loop attempt]
+        GenRetryStart --> GenRateLimit[Acquire RateLimiter sliding window]
+        GenRateLimit --> GenCall[Provider: generate]
+        GenCall -->|Transient Error| GenCanRetry{Retries < 2?}
+        GenCanRetry -->|Yes: backoff delay| GenRetryStart
+        GenCanRetry -->|No / Fatal Error| GenFail[Answer generation failed]
+        GenCall -->|Success| GenReleaseConc[Release Concurrency Semaphore]
+    end
+
+    GenFail --> ErrGen[Return structured error:<br/>status: error<br/>reason: Answer generation failed]
+    GenReleaseConc --> CheckIncomplete{Generation complete & non-empty?}
+    CheckIncomplete -->|No: Empty or length truncated| ErrIncomplete[Return structured error:<br/>status: error<br/>reason: Answer generation was incomplete]
+    CheckIncomplete -->|Yes| ExtractIDs[8. Extract cited source IDs from answer text]
+
+    ExtractIDs --> ValCitations[9. Validate citation IDs against retrieved sources]
+    ValCitations --> FinalResult([10. Return structured response:<br/>status: answered<br/>answer, citations, citation_status, metrics])
 ```
 
 ---
