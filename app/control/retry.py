@@ -30,6 +30,7 @@ def is_retryable_error(error: Exception) -> bool:
     return status_code in RETRYABLE_STATUS_CODES
 
 
+
 def call_with_retries(
     function,
     *args,
@@ -45,16 +46,18 @@ def call_with_retries(
     while True:
         if before_attempt is not None:
             before_attempt()
-            
+
         try:
             result = function(*args, **kwargs)
             return result, retries
 
         except Exception as error:
             if not is_retryable_error(error):
+                error.retries = retries
                 raise
 
             if retries >= max_retries:
+                error.retries = retries
                 raise
 
             delay = min(
